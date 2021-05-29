@@ -5,57 +5,62 @@ import (
 	"os/exec"
 	"sync"
 	"fmt"
+	// "bytes"
 )
 
 // Critical question is around how to select an identifier for each job.
 // Pid is a bad choice as it cycles on the OS.
-type jobsManager struct {
-	jobsPool sync.Map //[uuid.UUID]string
-	output sync.Map //[uuid.UUID][]byte	// What if the output of a job is too large.
+type JobsManager struct {
+	jobs sync.Map //[uuid.UUID]string
+	output sync.Map //[uuid.UUID][]byte	// What if the output of a job is too large. - NOTE: Only read from this.
+	wg sync.WaitGroup // Counts the number of workers currently running.
 }
 
-type JobsManager interface {
-	Start(string, ...string) (bool, uuid.UUID)
-	Stop(uuid.UUID) (bool, error)
-	Query(uuid.UUID) (string, error)
-}
-
-func NewJobsManager() JobsManager {
-	return jobsManager{}
-}
-
-func (jm jobsManager) Start(cmd string, args ...string) (bool, uuid.UUID) {
+func (jm *JobsManager) Start(cmd string, args ...string) (bool, uuid.UUID) {
 	id := uuid.New()
+	// Construct Command
 	c := exec.Command(cmd)
 	for _, arg := range args {
 		c.Args = append(c.Args, arg)
 	}
-	err := c.Start()
-	if err != nil {
-		fmt.Printf("%v", err)
-	}
-	err = c.Wait()
-	if err != nil {
-		fmt.Printf("%v", err)
-	}
-	out, _ := c.Output()
-	fmt.Printf("Output: %v", out)
+	jm.jobs.Store(id, c)
+	jm.wg.Add(1)
+	go func(id uuid.UUID, c *exec.Cmd, wg *sync.WaitGroup){ 
+		defer wg.Done()
+		fmt.Println("Running Command")
+		out, err := c.Output()
+		if err != nil {
+			fmt.Printf("Had the following issue: %v", err)
+			return 
+		}
+		fmt.Println("storing value %v at id %v", out, id)
+		jm.output.Store(id, out)
+	}(id, c, &jm.wg)
 	return true, id
 }
 
 func main() {
-	jm := NewJobsManager()
-	out, _ := jm.Start("wget", "www.google.com")
-	newOut, _ := jm.Start("cat", "index.html")
-	fmt.Printf("%v", out)
-	fmt.Printf("\n newoutput:\n %v", newOut)
+	jm := &JobsManager{}
+	ok, id := jm.Start("wget", "www.google.com")
+	if !ok {
+		fmt.Println("Job not started")
+	}
+	ok, id2 := jm.Start("cat", "index.html")
+	if !ok {
+		fmt.Println("Job not started")
+	}
+	jm.wg.Wait()
+	out, _ := jm.output.Load(id)
+	fmt.Printf("%s", out)
+	newOut, _ := jm.output.Load(id2)
+	fmt.Printf("\n newoutput:\n %s", newOut)
 }
-func (jm jobsManager) Stop(uuid.UUID) (bool, error) {
+func (jm *JobsManager) Stop(uuid.UUID) (bool, error) {
 	_ = jm
 	return true, nil
 }
 
-func (jm jobsManager) Query(uuid.UUID) (string, error) {
+func (jm *JobsManager) Query(uuid.UUID) (string, error) {
 	_ = jm
 	return "", nil
 }
