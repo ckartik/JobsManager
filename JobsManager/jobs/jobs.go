@@ -1,11 +1,10 @@
-package main
+package jobs
 
 import (
 	"github.com/google/uuid"
 	"os/exec"
 	"sync"
 	"fmt"
-	// "bytes"
 )
 
 // Critical question is around how to select an identifier for each job.
