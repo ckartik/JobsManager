@@ -7,7 +7,7 @@ import (
     "net/http"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"./jobs"
+	"github.com/ckaritk/JobsManager/Jobs"
   )
 )
 
