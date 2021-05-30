@@ -2,15 +2,13 @@ package main
 
 import (
     "fmt"
-    "log"
-	"context"
+	"time"
+	"log"
     "net/http"
-	"os/exec"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ckaritk/JobsManager/Jobs" // TODO: @ckartik - change this to lowercase in final impl.
+	"github.com/ckaritk/JobsManager/Jobs"
   )
-)
 
 type Env struct {
 	jm Jobs.JobsManager
@@ -46,18 +44,20 @@ func main() {
 	  // Subrouters:
 	  r.Route("/{jobID}", func(r chi.Router) {
 		r.Use(env.JobsCtx)
-		r.Get("/", getArticle)
+		r.Get("/", getJob)
 	  })
 	  */
 	})
   
+	
+	log.Println("Starting server at 8443")
 	http.ListenAndServe(":8443", r)
 }
-
+/*
 func (env * Env) JobsCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		jobID := chi.URLParam(r, "jobID")
-		job, ok := env.jm.jobs.Load(jobID)
+		job, ok := env.jm.Jobs.Load(jobID)
 		if !ok {
 		  http.Error(w, http.StatusText(422), 422)
 		  return
@@ -66,15 +66,25 @@ func (env * Env) JobsCtx(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	  })
 }
+*/
 
+/*
 
 // TODO: @ckartik add authed info to request context.
  func (env *Env) createJob(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	article, ok := ctx.Value("job").(*exec.Cmd)
+	// ctx := r.Context()
+	// article, ok := ctx.Value("job").(*exec.Cmd)
+	/*
 	if !ok {
 	  http.Error(w, http.StatusText(422), 422)
 	  return
 	}
-	w.Write([]byte(fmt.Sprintf("title:%s", article.Title)))
+	w.Write([]byte(fmt.Sprintf("title:")))
+ 
+	*/
+
+// TODO: @ckartik add authed info to request context.
+ func (env *Env) createJob(w http.ResponseWriter, r *http.Request) {
+	// id, ok := env.jm.Start()
+	w.Write([]byte(fmt.Sprintf("title:")))
   }
