@@ -1,4 +1,4 @@
-package jobs
+package Jobs
 
 import (
 	"github.com/google/uuid"
@@ -13,6 +13,7 @@ type JobsManager struct {
 	jobs sync.Map //[uuid.UUID]string
 	output sync.Map //[uuid.UUID][]byte	// What if the output of a job is too large. - NOTE: Only read from this.
 	wg sync.WaitGroup // Counts the number of workers currently running.
+
 }
 
 func (jm *JobsManager) Start(cmd string, args ...string) (bool, uuid.UUID) {
