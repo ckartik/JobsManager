@@ -1,18 +1,19 @@
 package Jobs
 
 import (
-	"github.com/google/uuid"
+	"fmt"
 	"os/exec"
 	"sync"
-	"fmt"
+
+	"github.com/google/uuid"
 )
 
 // Critical question is around how to select an identifier for each job.
 // Pid is a bad choice as it cycles on the OS.
 type JobsManager struct {
-	Jobs sync.Map //[uuid.UUID]string
-	Output sync.Map //[uuid.UUID][]byte	// What if the output of a job is too large. - NOTE: Only read from this.
-	wg sync.WaitGroup // Counts the number of workers currently running.
+	Jobs   sync.Map       //[uuid.UUID]string
+	Output sync.Map       //[uuid.UUID][]byte	// What if the output of a job is too large. - NOTE: Only read from this.
+	wg     sync.WaitGroup // Counts the number of workers currently running.
 
 }
 
@@ -25,13 +26,13 @@ func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, bool) {
 	}
 	jm.Jobs.Store(id, c)
 	jm.wg.Add(1)
-	go func(id uuid.UUID, c *exec.Cmd, wg *sync.WaitGroup){ 
+	go func(id uuid.UUID, c *exec.Cmd, wg *sync.WaitGroup) {
 		defer wg.Done()
 		fmt.Println("Running Command")
 		out, err := c.Output()
 		if err != nil {
 			fmt.Printf("Had the following issue: %v", err)
-			return 
+			return
 		}
 		fmt.Println("storing value %v at id %v", out, id)
 		jm.Output.Store(id, out)

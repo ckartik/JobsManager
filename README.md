@@ -56,8 +56,8 @@ There are two key tradeoffs here:
 
 # API
 
-There are two key technqiues we will be using to wrap the Job Library through the API. 	We'll be using a Middleware service called `go-chi` which will allow us to do our two *tricks* with ease.
-1. We will be doing **``dependency enjection``** to ensuring our route handlers have access to the requiste Job and Authorization Service. We do this by defining an `[Env]` structure shown below.
+There are two key techniques we will be using to wrap the Job Library through the API. 	We'll be using a Middleware service called `go-chi` which will allow us to do our two *tricks* with ease.
+1. We will be doing **``dependency enjection``** to ensuring our route handlers have access to the requisite Job and Authorization Service. We do this by defining an `[Env]` structure shown below.
 
 	```go
 	type Env struct {
