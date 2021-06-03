@@ -70,6 +70,8 @@ There are two key tradeoffs here:
 	The benefit here is that we have good performance with access from goroutines and other concurrent entities (client to main server goroutine) in a very disjoint fashion in regards to keys.**
 	_We've decided to go with this approach because our system is expected to have each goroutine spun up interact with a single key inside the maps, which means sync.Map is perfect.__
 
+2. We decided to store the value of the Exit Code and job completion directly through controlflow of the executing go-routine. We do this rather than re-querying the `[Cmd]` structure because it uses the underlying `os.Process` along with `pid` value to determine job status. This however could be erronous over time since PIDs in the os can cycle. As such the decisions was made to store the job state in the server memory (e.g map structure).
+
 # API
 
 There are two key techniques we will be using to wrap the Job Library through the API. 	We'll be using a Middleware service called `go-chi` which will allow us to do our two *tricks* with ease.
@@ -79,7 +81,7 @@ There are two key techniques we will be using to wrap the Job Library through th
 	```go
 	type Env struct {
 		jobService Jobs.JobsManager
-		authZService sync.Map
+		authZService sync.Map // uuid -> list
 	}
 	```
 	We will construct our handlers as follows:
@@ -95,7 +97,46 @@ There are two key techniques we will be using to wrap the Job Library through th
 2. We'll use the **CommonName** that has been verified through our CA chain and the TLS handshake to authenticate user. We will index our `authZService` using the CommonName stored in the client cert. This can be found here: `r.TLS.VerifiedChains[0][0].Subject.CommonName`.
 We will make the assumption that the CommonName will always be unique to the client and that CAs will only sign the correct clients.
 
-## Client
+## Security - Authentication
+As we've shown above, we'll use the TLS mutual auth to authenticate the client and use the CommonName as the User Identity.
+
+## Security - Authorization
+Our middleware will handle Authorization.
+1. When creating a job, it will store the ID of the job into the map with the User ID as the key.
+2. When requesting access or mutation of a job, we will have middleware that checks the job ID in the param and ensures the ID matches one that the User has access to.
+
+## Router & Endpoints:
+
+### `/api/job [post]`
+This endpoint creates a new Job.
+
+### Payload requirements: 
+```graphql
+{ "cmd": !String, "args": ![String]}
+```
+
+### `/api/job/:jobid [get]`
+This endpoint gets details about the job specified at jobid.
+
+This endpoint will use authorization middleware to check the user has access to the endpoint. If the user doesn't have access, it will send a `403` response and stop routing the request.
+
+### Response Payload - Success (200): 
+```graphql
+{ "cmd": !String, "args": ![String], "active": bool}
+```
+
+### `/api/job/:jobid/stop [post]`
+This sends a kill signal to the command if still running.
+
+This endpoint will use authorization middleware to check the user has access to the endpoint. If the user doesn't have access, it will send a `403` response and stop routing the request.
+
+### Response Payload - Success: 
+```json
+{ "status_code": 202 }
+```
+
+
+# Client
 The client will have 4 key commands, and will be named `[Jobs]`.
 1. Start
 2. List
