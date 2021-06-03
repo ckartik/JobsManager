@@ -176,6 +176,37 @@ $ Jobs stop [!id]
 	1. We will first generate a CSR with CommonName set to the clients unique ID.
 	2. We will sign it oursevles using the server private key to generate a client Certificate for future mTLS.
 - **Certificate Revocation**: This is outside the scope of this project as this should only serve as a POC and if any certificates are leaked, we can simply redo the entire self-signed CA process and replace the root (only) CA cert & key manually.
+
+### Server x509 Cert:
+```yaml
+Certificate:
+    Data:
+        Version: 1 (0x0)
+        Serial Number: 14350400092297812159 (0xc726dcda2e24d8bf)
+    Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C=CA, ST=ON, L=Brampton, O=Teleport, OU=experiment, CN=localhost/emailAddress=ckrish@live.com
+        Validity
+            Not Before: Jun  3 16:05:00 2021 GMT
+            Not After : Mar 23 16:05:00 2024 GMT
+	...
+```
+### Client x509 Cert:
+Note: `Kartik#1` is the commonName and the Identity of the client that will be used to index the authorization map in the server.
+```yaml
+Certificate:
+    Data:
+        Version: 1 (0x0)
+        Serial Number: 15626978577530676140 (0xd8de2e38925ae3ac)
+    Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C=CA, ST=ON, L=Brampton, O=Teleport, OU=experiment, CN=localhost/emailAddress=ckrish@live.com
+        Validity
+            Not Before: Jun  3 16:08:07 2021 GMT
+            Not After : Mar 23 16:08:07 2024 GMT
+        Subject: C=CA, ST=ON, L=Toronto, O=Kartik Chopra, OU=Kartik, CN=Kartik#1/emailAddress=ckrish@live.com
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+```
 ### Testing purposes
 For testing the API, use the following command on curls.
 ```bash
