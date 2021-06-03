@@ -135,7 +135,7 @@ This endpoint will use authorization middleware to check the user has access to 
 { "cmd": !String, "args": ![String], "active": !bool, "exitCode": int}
 ```
 
-### `/api/job/:jobid [get]`
+### `/api/job/:jobid/output [get]`
 This endpoint gets output regarding the job specified for jobid.
 
 This endpoint will use authorization middleware to check the user has access to the endpoint. If the user doesn't have access, it will send a `403` response and stop routing the request.
