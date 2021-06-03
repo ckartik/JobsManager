@@ -13,7 +13,7 @@ The **Tradeoffs** will be highlighted at the end of each section.
 
 The core of the library revolves around a single object called `JobsManager`.
 This structure will contain various Maps each of which can be indexed via the uuidV4 of the job to retrieve job information.
-We'll synchronize access to these maps with RWlocks (Discussions around choice can be seen in Tradeoffs section below.)
+We'll synchronize access to these maps with with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
 
 The main purpose of the library is to handle 4 key functions:
 1. Starting a job.
@@ -44,7 +44,7 @@ func (*JobsManager) Start(string, ...string) (uuid.UUID, bool)
 ```
 There are two major parts to this function.
 1. Construct the command object with the parameters provided.
-2. Spin up a goroutine, where the output is hooked into the `[Output]` sync map.
+2. Spin up a goroutine, which will manage mutation to State variables (e.g Status, ExitCode, Std(out|err)).
 
 Finally the function should return the UUIDv4 and a boolean signature notifying success of job creation.
 
@@ -52,25 +52,30 @@ Finally the function should return the UUIDv4 and a boolean signature notifying 
 ``` go
 func (*JobsManager) Query(uuid.UUID) (exited bool, exitCode int, error)
 ```
-This function will use the uuid to `Load` the correct `*exec.Cmd` value and check the underlying `os.ProcessState` to see if the job has Exited and what the exit status is.
+This function will use the uuid to `Load` the correct values from the various sync.Maps associated with job state and output.
 
 ## Stop
 ``` go
 func (*JobsManager) Stop(uuid.UUID) (bool, error)
 ```
-This function will use the uuid to `Load` the correct `*exec.Cmd` value and check the underlying `os.ProcessState` to see if the job has Exited, if it hasn't it will send a Kill signal using the `os.Process` field.
+This function will use the uuid to `Load` the correct `*exec.Cmd` value and check the state maps to see if the job has Exited, if it hasn't it will send a Kill signal using the `os.Process` field.
 
 ## Tradeoffs
 There are two key tradeoffs here:
 1. The schronization primitive used, there were several options in mind
 	1. To have a `RWLock` on a map to allow of synchronized access for all goroutines. The benefit here would be if the process was very Read Heavy on the whole map, which is the case since most clients will tend to read after initial job creation and completion.
-	2. To use a `Mutex`, this is the most straightforward approach, but since reads to Map could be a common occurence, it would lead to too *hypothesized* much contention.
+	2. To use a `Mutex`, this is the most straightforward approach, but since reads to Map could be a common occurence, it would lead to too much (*hypothesized*) contention.
 	3. **To use the `sync.Map` and provided syncrhonized access to disjoint keys in the map. 
 	The downside here is we can't enforce type safety, and on every retrieval there is a headache of doing a Type Assertion on the retrieved value.
 	The benefit here is that we have good performance with access from goroutines and other concurrent entities (client to main server goroutine) in a very disjoint fashion in regards to keys.**
-	_We've decided to go with this approach because our system is expected to have each goroutine spun up interact with a single key inside the maps, which means sync.Map is perfect.__
+	_We've decided to go with this approach because our system is expected to have each goroutine that is spun up interact with a single key inside each map, a use-case for which means sync.Map is perfect._
+	See excerpt from Go Docs below:
+		> The Map type is optimized for two common use cases: (1) when the entry for a given key is only ever written once but read many times, as in caches that only grow, or (2) when multiple goroutines read, write, and overwrite entries for disjoint sets of keys.
 
 2. We decided to store the value of the Exit Code and job completion directly through controlflow of the executing go-routine. We do this rather than re-querying the `[Cmd]` structure because it uses the underlying `os.Process` along with `pid` value to determine job status. This however could be erronous over time since PIDs in the os can cycle. As such the decisions was made to store the job state in the server memory (e.g map structure).
+
+### Scoping
+We've scoped the storage of each process to be in heap data-structures. Although this may cause some contention on the heap lock, we see it as reasonable to for the scope of this Project.
 
 # API
 
@@ -115,6 +120,11 @@ This endpoint creates a new Job.
 { "cmd": !String, "args": ![String]}
 ```
 
+### Response Payload - Success (200): 
+```graphql
+{ "id": uuidv4}
+```
+
 ### `/api/job/:jobid [get]`
 This endpoint gets details about the job specified at jobid.
 
@@ -135,6 +145,8 @@ This endpoint will use authorization middleware to check the user has access to 
 { "status_code": 202 }
 ```
 
+## Tradeoffs
+ - Most of the critical tradeoffs here are around how we handle the use of a self-signed Root Certificate created from the openssl utility.
 
 # Client
 The client will have 4 key commands, and will be named `[Jobs]`.
@@ -170,7 +182,16 @@ $ Jobs stop [!id]
 > Stopped # Happypath
 
 ```
-## CA and Certificate Management & Revocation
+
+We will be storing a local "cache" of the values from the server when we know the job has completed.
+We will also be storing a list of Job IDs that we recieve from the server inside client memory.
+
+## Tradeoffs
+- There aren't many big design decisions here.
+- This is mostly because we've decided to handle authentication on the mutual TLS side.
+	- Therefore the network level guarantees provided by mTLS handle most of the tradeoffs that would need to be made at this layer.
+
+# CA and Certificate Management & Revocation
 - **CA**: We will use the openssl CA and a self-signed server certificate as the Root and **ONLY** CA certificate in the chain. Given the scope of ths project, managing a chain of CA's and an air-gapped root CA is assumed to be outside the scope of this POC.
 - **Client Certificate**: We will use the server private key to sign the client certificate. 
 	1. We will first generate a CSR with CommonName set to the clients unique ID.
