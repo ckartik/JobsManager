@@ -132,7 +132,23 @@ This endpoint will use authorization middleware to check the user has access to 
 
 ### Response Payload - Success (200): 
 ```graphql
-{ "cmd": !String, "args": ![String], "active": bool}
+{ "cmd": !String, "args": ![String], "active": !bool, "exitCode": int}
+```
+
+### `/api/job/:jobid [get]`
+This endpoint gets output regarding the job specified for jobid.
+
+This endpoint will use authorization middleware to check the user has access to the endpoint. If the user doesn't have access, it will send a `403` response and stop routing the request.
+
+### Response Payload - Success (200):
+```graphql
+{
+	active: !bool,
+	output: {
+		stdOut: !String,
+		stdErr: !String,
+	}
+}
 ```
 
 ### `/api/job/:jobid/stop [post]`
