@@ -209,7 +209,6 @@ Certificate:
         Validity
             Not Before: Jun  3 16:05:00 2021 GMT
             Not After : Mar 23 16:05:00 2024 GMT
-	...
 ```
 ### Client x509 Cert:
 Note: `Kartik#1` is the commonName and the Identity of the client that will be used to index the authorization map in the server.
