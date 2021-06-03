@@ -39,6 +39,7 @@ func main() {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Print(r.TLS.VerifiedChains[0][0].Subject.CommonName)
 		w.Write([]byte("hi"))
 	})
 
@@ -56,7 +57,7 @@ func main() {
 	})
 
 	// Create a CA certificate pool and add cert.pem to it
-	caCert, err := ioutil.ReadFile("cert.pem")
+	caCert, err := ioutil.ReadFile("MyRootCA.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,10 +75,11 @@ func main() {
 	server := &http.Server{
 		Addr:      ":8443",
 		TLSConfig: tlsConfig,
+		Handler:   r,
 	}
 
 	log.Println("Starting server at 8443")
-	log.Fatal(server.ListenAndServeTLS("cert.pem", "key.pem"))
+	log.Fatal(server.ListenAndServeTLS("MyRootCA.pem", "MyRootCA.key"))
 
 	// http.ListenAndServe(":8443", r)
 }

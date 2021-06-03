@@ -75,4 +75,11 @@ There are two key techniques we will be using to wrap the Job Library through th
 	```
 
 	This will allow us to interact with the Jobs Manager Service provided by the 
-2. We'll 
+2. We'll use the CommonName that has been verified through our CA chain and the TLS handshake to authenticate user. We will index our `authZService` using the CommonName stored in the client cert. This can be found here: `r.TLS.VerifiedChains[0][0].Subject.CommonName`.
+We will make the assumption that the CommonName will always be unique to the client and that CAs will only sign the correct clients.
+
+### Testing purposes
+For testing the API, use the following command on curls.
+```bash
+$ curl -k --cert client.pem --key MyClient1.key https://localhost:8443/
+```
