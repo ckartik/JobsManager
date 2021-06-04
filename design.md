@@ -81,7 +81,7 @@ We've scoped the storage of each process to be in heap data-structures. Although
 
 There are two key techniques we will be using to wrap the Job Library through the API. 	We'll be using a Middleware service called `go-chi` which will allow us to do our two *tricks* with ease.
 
-1. We will be doing **``dependency enjection``** to ensure our route handlers have access to the requisite Job and Authorization Service. We do this by defining an `[Env]` structure shown below.
+1. We will be doing **``dependency injection``** to ensure our route handlers have access to the requisite Job and Authorization Service. We do this by defining an `[Env]` structure shown below.
 
 	```go
 	type Env struct {
