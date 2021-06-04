@@ -44,7 +44,7 @@ type JobsManager struct {
 
 ## Start
 ```go
-func (*JobsManager) Start(string, ...string) (uuid.UUID, bool)
+func (*JobsManager) Start(cmd string, args ...string) (uuid.UUID)
 ```
 There are two major parts to this function.
 1. Construct the command object with the parameters provided.
@@ -54,7 +54,7 @@ Finally the function should return the UUIDv4 and a boolean signature notifying 
 
 ## Query
 ``` go
-func (*JobsManager) Query(uuid.UUID) (exited bool, exitCode int, error)
+func (*JobsManager) Query(uuid.UUID) (js JobStatus, error)
 ```
 This function will use the uuid to `Load` the correct values from the various sync.Maps associated with job state and output.
 
