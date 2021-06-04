@@ -12,8 +12,9 @@ The **Tradeoffs** will be highlighted at the end of each section.
 # Library
 
 The core of the library revolves around a single object called `JobsManager`.
-This structure will contain various Maps each of which can be indexed via the uuidV4 of the job to retrieve job information.
-We'll synchronize access to these maps with with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
+This structure will contain various values inside a JobsInfo Structure which can be indexed via the uuidV4 of the job.
+
+We'll synchronize access to this map with with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
 
 The main purpose of the library is to handle 4 key functions:
 1. Starting a job.
@@ -22,19 +23,22 @@ The main purpose of the library is to handle 4 key functions:
 4. Maintaining and providing logs from a jobs output.
 
 ``` go
+type JobStatus struct {
+	// Options - ["Queued", "Active", "Stopped", "Completed", "Errored"]
+	status string
+	exitCode uint8
+}
+
+type JobsInfo struct {
+	command *exec.Cmd
+	js JobStatus
+
+	StdOut []byte
+	StdErr []byte
+}
+
 type JobsManager struct {
-	Jobs sync.Map
-
-	// These fields are used for pseduo-persistence.
-	// Type: uuid.UUID -> []byte
-	StdOut sync.Map
-	StdErr sync.Map 
-
-	// We store status locally because PIDs can cycle.
-	// This could cause integerity concerns.
-	// e.g Job A with PID 1 completes but Job B cycles back to PID 1
-	Status sync.Map
-	ExitCode sync.Map
+	Jobs sync.Map // uuid -> JobsInfo
 }
 ```
 
