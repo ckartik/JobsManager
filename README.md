@@ -180,6 +180,10 @@ With regards to selection of viable ciphersuites, it seems go doesn't allow you 
 
 After some research, I came across a blog post by a well-known TLS infrastructure engineer named Joe Shaw, he describes the lack of need to specifiy ciphersuites as a result of the quality of TLS 1.3 ciphersuites. https://www.joeshaw.org/abusing-go-linkname-to-customize-tls13-cipher-suites/
 
+### Benefits
+>- The biggest benefit is a speedup, as the handshake only has 5 steps compared to 7 in 1.2.
+
+>Ref: https://kinsta.com/blog/tls-1-3/#:~:text=and%20improved%20security.-,Speed%20Benefits%20of%20TLS%201.3,Time%20(0%2DRTT).
 As such we'll ensure that the client and server certificates have all the needed structure to apply to tls 1.3
 
 ## Security - Authentication
