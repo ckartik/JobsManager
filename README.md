@@ -291,7 +291,6 @@ $ Jobs stop [!id]
 
 ```
 
-We will be storing a local "cache" of the values from the server when we know the job has completed.
 We will also be storing a list of Job IDs that we recieve from the server inside client memory.
 
 ## Tradeoffs
