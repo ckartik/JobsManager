@@ -153,7 +153,7 @@ This endpoint will use authorization middleware to check the user has access to 
 
 ### Response Payload - Success (200): 
 ```graphql
-{ "cmd": !String, "args": ![String], "active": !bool, "exitCode": int}
+{ "cmd": !String, "args": ![String], "Status": !String, "exitCode": int}
 ```
 
 ### `/api/job/:jobid/output [get]`
