@@ -14,7 +14,7 @@ The **Tradeoffs** will be highlighted at the end of each section.
 The core of the library revolves around a single object called `JobsManager`.
 This structure will contain various values inside a JobsInfo Structure which can be indexed via the uuidV4 of the job.
 
-We'll synchronize access to this map with with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
+We'll synchronize access to this map with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
 
 The main purpose of the library is to handle 4 key functions:
 1. Starting a job.
@@ -24,21 +24,33 @@ The main purpose of the library is to handle 4 key functions:
 
 ``` go
 type JobStatus struct {
-	// Options - ["Queued", "Active", "Stopped", "Completed", "Errored"]
+	// Options - ["Stopped", "Completed", "Errored"]
 	status string
 	exitCode uint8
+	output JobOutput
 }
 
-type JobsInfo struct {
-	command *exec.Cmd
-	js JobStatus
-
+type JobOutput struct {
 	StdOut []byte
 	StdErr []byte
 }
 
+type JobsInfo struct {
+	Command *exec.Cmd
+	JobStatus JobStatus
+}
+
+// Note: All channels will be buffered with cap 1.
+type JobChans struct {
+	// Write from API
+	kill chan struct{}{}
+	// Read from API
+	status chan JobStatus
+}
+
 type JobsManager struct {
-	Jobs sync.Map // uuid -> JobsInfo
+	JobInfo sync.Map // uuid -> JobsInfo
+	JobChannels sync.Map
 }
 ```
 
@@ -48,22 +60,60 @@ func (*JobsManager) Start(cmd string, args ...string) (uuid.UUID)
 ```
 There are two major parts to this function.
 1. Construct the command object with the parameters provided.
-2. Spin up a goroutine, which will manage mutation to State variables (e.g Status, ExitCode, Std(out|err)).
+2. Spin up a goroutine, which will send info through status channel when complete.
 
-Finally the function should return the UUIDv4 and a boolean signature notifying success of job creation.
+Finally the function should return the UUIDv4.
 
 ## Query
 ``` go
-func (*JobsManager) Query(uuid.UUID) (js JobStatus, error)
+func (jm, *JobsManager) Query(uuid.UUID) (found bool, js JobStatus)
 ```
-This function will use the uuid to `Load` the correct values from the various sync.Maps associated with job state and output.
+This function will use the uuid to `Load` job status data structure stored inside the jobs Map. If not found in JobsInfo, it will return False. It will detect "active" jobs via a select statments.
+
+```go
+jobInfo = jm.JobInfo.Load(uuid)
+if jobInfo.Command == nil {
+	return false, nil
+}
+else if jobInfo.JobStatus == nil {
+	return true, JobStatus{status:"Active"}
+} else{
+	return true, jobInfo.JobStatus
+}
+```
 
 ## Stop
 ``` go
-func (*JobsManager) Stop(uuid.UUID) (bool, error)
+func (*JobsManager) Stop(uuid.UUID) (killSent bool, error)
 ```
-This function will use the uuid to `Load` the correct `*exec.Cmd` value and check the state maps to see if the job has Exited, if it hasn't it will send a Kill signal using the `os.Process` field.
+This function will load the job status state map to see if the job has Exited, if it hasn't it will send a Kill signal using the `os.Process` field.
 
+It will subsequently send a singal through the quit channel.
+It will be the responsiblity of the go-routine managing the job to detect the job closed due to a Kill Singal. By using the channel, we can communicate from the Stop function/server request goroutine to alter the controlflow in the worker goroutine, example of control flow is show below.
+```go
+
+func (js JobService) Stop(uuid...){
+	...
+	select {
+		case js.jobs.load(uuid).kill <- struct{}{}:
+			...
+		default:
+			...
+	}
+}
+go func(...){
+	...
+	jobservice.kill = make(chan struct{}{},1)
+	...
+	if ... // Code Job with an error
+	{
+		select {
+				case <- jobservice.kill:
+					// Update status as Kill
+				default:
+					// Update as errored.
+		}
+```
 ## Tradeoffs
 There are two key tradeoffs here:
 1. The schronization primitive used, there were several options in mind
