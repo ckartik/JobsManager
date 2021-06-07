@@ -106,6 +106,23 @@ There are two key techniques we will be using to wrap the Job Library through th
 2. We'll use the **CommonName** that has been verified through our CA chain and the TLS handshake to authenticate user. We will index our `authZService` using the CommonName stored in the client cert. This can be found here: `r.TLS.VerifiedChains[0][0].Subject.CommonName`.
 We will make the assumption that the CommonName will always be unique to the client and that CAs will only sign the correct clients.
 
+## Security - Transport
+This implementation will be using TLS 1.3 as it's the most recent implementation.
+To do this we will set the `MinVersion` field as below.
+```go
+... &tls.Config{
+		...
+		MinVersion: tls.VersionTLS13,
+}
+```
+
+With regards to selection of viable ciphersuites, it seems go doesn't allow you to select specifics. The following is above `CipherSuites []uint16` field in the tls config structure.
+> Note that TLS 1.3 ciphersuites are not configurable.
+
+After some research, I came across a blog post by a well-known TLS infrastructure engineer named Joe Shaw, he describes the lack of need to specifiy ciphersuites as a result of the quality of TLS 1.3 ciphersuites. https://www.joeshaw.org/abusing-go-linkname-to-customize-tls13-cipher-suites/
+
+As such we'll ensure that the client and server certificates have all the needed structure to apply to tls 1.3
+
 ## Security - Authentication
 As we've shown above, we'll use the TLS mutual auth to authenticate the client and use the CommonName as the User Identity.
 
