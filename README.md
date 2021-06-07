@@ -43,9 +43,9 @@ type JobsInfo struct {
 // Note: All channels will be buffered with cap 1.
 type JobChans struct {
 	// Write from API
-	kill chan struct{}{}
+	Kill chan struct{}{}
 	// Read from API
-	status chan JobStatus
+	Status chan JobStatus
 }
 
 type JobsManager struct {
@@ -71,6 +71,15 @@ func (jm, *JobsManager) Query(uuid.UUID) (found bool, js JobStatus)
 This function will use the uuid to `Load` job status data structure stored inside the jobs Map. If not found in JobsInfo, it will return False. It will detect "active" jobs via a select statments.
 
 ```go
+// Check channels for value, if exist, load into cache/sync map.
+chans := jm.JobChannels.Load(uuid)
+select {
+	case status <-chans.status
+		// Load map with status.
+	default:
+		continue
+}
+...
 jobInfo = jm.JobInfo.Load(uuid)
 if jobInfo.Command == nil {
 	return false, nil
