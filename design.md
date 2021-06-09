@@ -12,9 +12,8 @@ The **Tradeoffs** will be highlighted at the end of each section.
 # Library
 
 The core of the library revolves around a single object called `JobsManager`.
-This structure will contain various values inside a JobsInfo Structure which can be indexed via the uuidV4 of the job.
-
-We'll synchronize access to this map with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
+This structure will contain various Maps each of which can be indexed via the uuidV4 of the job to retrieve job information.
+We'll synchronize access to these maps with with the use of a sync.Map (Discussions around choice can be seen in Tradeoffs section below.)
 
 The main purpose of the library is to handle 4 key functions:
 1. Starting a job.
@@ -23,106 +22,44 @@ The main purpose of the library is to handle 4 key functions:
 4. Maintaining and providing logs from a jobs output.
 
 ``` go
-type JobStatus struct {
-	// Options - ["Stopped", "Completed", "Errored"]
-	status string
-	exitCode uint8
-	output JobOutput
-}
-
-type JobOutput struct {
-	StdOut []byte
-	StdErr []byte
-}
-
-type JobsInfo struct {
-	Command *exec.Cmd
-	JobStatus JobStatus
-}
-
-// Note: All channels will be buffered with cap 1.
-type JobChans struct {
-	// Write from API
-	Kill chan struct{}{}
-	// Read from API
-	Status chan JobStatus
-}
-
 type JobsManager struct {
-	JobInfo sync.Map // uuid -> JobsInfo
-	JobChannels sync.Map
+	Jobs sync.Map
+
+	// These fields are used for pseduo-persistence.
+	// Type: uuid.UUID -> []byte
+	StdOut sync.Map
+	StdErr sync.Map 
+
+	// We store status locally because PIDs can cycle.
+	// This could cause integerity concerns.
+	// e.g Job A with PID 1 completes but Job B cycles back to PID 1
+	Status sync.Map
+	ExitCode sync.Map
 }
 ```
 
 ## Start
 ```go
-func (*JobsManager) Start(cmd string, args ...string) (uuid.UUID)
+func (*JobsManager) Start(string, ...string) (uuid.UUID, bool)
 ```
 There are two major parts to this function.
 1. Construct the command object with the parameters provided.
-2. Spin up a goroutine, which will send info through status channel when complete.
+2. Spin up a goroutine, which will manage mutation to State variables (e.g Status, ExitCode, Std(out|err)).
 
-Finally the function should return the UUIDv4.
+Finally the function should return the UUIDv4 and a boolean signature notifying success of job creation.
 
 ## Query
 ``` go
-func (jm, *JobsManager) Query(uuid.UUID) (found bool, js JobStatus)
+func (*JobsManager) Query(uuid.UUID) (exited bool, exitCode int, error)
 ```
-This function will use the uuid to `Load` job status data structure stored inside the jobs Map. If not found in JobsInfo, it will return False. It will detect "active" jobs via a select statments.
-
-```go
-// Check channels for value, if exist, load into cache/sync map.
-chans := jm.JobChannels.Load(uuid)
-select {
-	case status <-chans.status
-		// Load map with status.
-	default:
-		continue
-}
-...
-jobInfo = jm.JobInfo.Load(uuid)
-if jobInfo.Command == nil {
-	return false, nil
-}
-else if jobInfo.JobStatus == nil {
-	return true, JobStatus{status:"Active"}
-} else{
-	return true, jobInfo.JobStatus
-}
-```
+This function will use the uuid to `Load` the correct values from the various sync.Maps associated with job state and output.
 
 ## Stop
 ``` go
-func (*JobsManager) Stop(uuid.UUID) (killSent bool, error)
+func (*JobsManager) Stop(uuid.UUID) (bool, error)
 ```
-This function will load the job status state map to see if the job has Exited, if it hasn't it will send a Kill signal using the `os.Process` field.
+This function will use the uuid to `Load` the correct `*exec.Cmd` value and check the state maps to see if the job has Exited, if it hasn't it will send a Kill signal using the `os.Process` field.
 
-It will subsequently send a singal through the quit channel.
-It will be the responsiblity of the go-routine managing the job to detect the job closed due to a Kill Singal. By using the channel, we can communicate from the Stop function/server request goroutine to alter the controlflow in the worker goroutine, example of control flow is show below.
-```go
-
-func (js JobService) Stop(uuid...){
-	...
-	select {
-		case js.jobs.load(uuid).kill <- struct{}{}:
-			...
-		default:
-			...
-	}
-}
-go func(...){
-	...
-	jobservice.kill = make(chan struct{}{},1)
-	...
-	if ... // Code Job with an error
-	{
-		select {
-				case <- jobservice.kill:
-					// Update status as Kill
-				default:
-					// Update as errored.
-		}
-```
 ## Tradeoffs
 There are two key tradeoffs here:
 1. The schronization primitive used, there were several options in mind
@@ -144,7 +81,7 @@ We've scoped the storage of each process to be in heap data-structures. Although
 
 There are two key techniques we will be using to wrap the Job Library through the API. 	We'll be using a Middleware service called `go-chi` which will allow us to do our two *tricks* with ease.
 
-1. We will be doing **``dependency enjection``** to ensure our route handlers have access to the requisite Job and Authorization Service. We do this by defining an `[Env]` structure shown below.
+1. We will be doing **``dependency injection``** to ensure our route handlers have access to the requisite Job and Authorization Service. We do this by defining an `[Env]` structure shown below.
 
 	```go
 	type Env struct {
@@ -164,27 +101,6 @@ There are two key techniques we will be using to wrap the Job Library through th
 	This will allow us to interact with the Jobs Manager Service provided by the env.
 2. We'll use the **CommonName** that has been verified through our CA chain and the TLS handshake to authenticate user. We will index our `authZService` using the CommonName stored in the client cert. This can be found here: `r.TLS.VerifiedChains[0][0].Subject.CommonName`.
 We will make the assumption that the CommonName will always be unique to the client and that CAs will only sign the correct clients.
-
-## Security - Transport
-This implementation will be using TLS 1.3 as it's the most recent implementation.
-To do this we will set the `MinVersion` field as below.
-```go
-... &tls.Config{
-		...
-		MinVersion: tls.VersionTLS13,
-}
-```
-
-With regards to selection of viable ciphersuites, it seems go doesn't allow you to select specifics. The following is above `CipherSuites []uint16` field in the tls config structure.
-> Note that TLS 1.3 ciphersuites are not configurable.
-
-After some research, I came across a blog post by a well-known TLS infrastructure engineer named Joe Shaw, he describes the lack of need to specifiy ciphersuites as a result of the quality of TLS 1.3 ciphersuites. https://www.joeshaw.org/abusing-go-linkname-to-customize-tls13-cipher-suites/
-
-### Benefits
->- The biggest benefit is a speedup, as the handshake only has 5 steps compared to 7 in 1.2.
-
->Ref: https://kinsta.com/blog/tls-1-3/#:~:text=and%20improved%20security.-,Speed%20Benefits%20of%20TLS%201.3,Time%20(0%2DRTT).
-As such we'll ensure that the client and server certificates have all the needed structure to apply to tls 1.3
 
 ## Security - Authentication
 As we've shown above, we'll use the TLS mutual auth to authenticate the client and use the CommonName as the User Identity.
@@ -214,22 +130,10 @@ This endpoint gets details about the job specified at jobid.
 
 This endpoint will use authorization middleware to check the user has access to the endpoint. If the user doesn't have access, it will send a `403` response and stop routing the request.
 
-### Response Payload - Success (200):
-```graphql
-{ "cmd": !String, "args": ![String], "Status": !String, "exitCode": int}
-```
-
-### `/api/job/list [get]`
-This endpoint gets details about all jobs under the authed user.
-
-Pagination is outside the scope of this project.
-
 ### Response Payload - Success (200): 
 ```graphql
-{ ["cmd": !String, "args": ![String], "Status": !String, "exitCode": int, ...]}
+{ "cmd": !String, "args": ![String], "active": !bool, "exitCode": int}
 ```
-
-
 
 ### `/api/job/:jobid/output [get]`
 This endpoint gets output regarding the job specified for jobid.
@@ -295,6 +199,7 @@ $ Jobs stop [!id]
 
 ```
 
+We will be storing a local "cache" of the values from the server when we know the job has completed.
 We will also be storing a list of Job IDs that we recieve from the server inside client memory.
 
 ## Tradeoffs
