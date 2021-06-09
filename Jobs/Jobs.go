@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 type JobStatus struct {
@@ -34,6 +36,20 @@ type JobChans struct {
 type JobsManager struct {
 	JobInfo     sync.Map // uuid -> JobsInfo
 	JobChannels sync.Map
+}
+
+func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID) {
+	id := uuid.New()
+	return id
+}
+
+func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
+	_ = id
+	return true, nil
+}
+
+func (jm *JobsManager) Query(id uuid.UUID) (bool, JobStatus) {
+	return true, JobStatus{}
 }
 
 func Test() {
