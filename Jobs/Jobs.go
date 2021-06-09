@@ -38,7 +38,7 @@ type JobsManager struct {
 	JobChannels sync.Map
 }
 
-func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID) {
+func (jm *JobsManager) Start(cmd string, args ...string) uuid.UUID {
 	id := uuid.New()
 	return id
 }
