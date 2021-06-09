@@ -1,6 +1,7 @@
 package Jobs
 
 import (
+	"fmt"
 	"os/exec"
 	"sync"
 )
@@ -33,4 +34,8 @@ type JobChans struct {
 type JobsManager struct {
 	JobInfo     sync.Map // uuid -> JobsInfo
 	JobChannels sync.Map
+}
+
+func Test() {
+	fmt.Println("HELLLOO")
 }

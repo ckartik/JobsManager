@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
+	Jobs "github.com/ckartik/jobsmanager/jobs"
 )
 
 func main() {
-	fmt.Println("Hello, world.")
+	Jobs.Test()
 }
