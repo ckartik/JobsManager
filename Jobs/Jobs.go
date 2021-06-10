@@ -77,7 +77,7 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 			}
 			jobStatus.ExitCode = err.(*exec.ExitError).ExitCode()
 		} else {
-			jobStatus.ExitCode = 0
+			jobStatus = JobStatus{State: Completed, ExitCode: 0}
 		}
 
 		channels.Status <- jobStatus
