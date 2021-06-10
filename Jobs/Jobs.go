@@ -17,6 +17,7 @@ const (
 	Errored   Status = "Errored"
 	Stopped   Status = "Stopped"
 	Running   Status = "Running"
+	NotFound  Status = "Not Found"
 )
 
 type JobStatus struct {
@@ -31,15 +32,15 @@ type JobOutput struct {
 }
 
 type JobInfo struct {
-	Command   *exec.Cmd
-	JobStatus *JobStatus
+	Command *exec.Cmd
+	Status  JobStatus
 }
 
 type JobChans struct {
 	// Write from API
 	Kill chan struct{}
 	// Read from API
-	Status chan *JobStatus
+	Status chan JobStatus
 }
 
 type JobsManager struct {
@@ -61,7 +62,7 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 	// TODO(@ckartik): Ensure that if command errors out early, we highlight in status/query.
 	err = info.Command.Start()
 	go func(output *JobOutput, channels JobChans, info JobInfo) {
-		var jobStatus *JobStatus
+		var jobStatus JobStatus
 
 		output.StdErr, err = io.ReadAll(stderr)
 		output.StdOut, err = io.ReadAll(stdout)
@@ -89,11 +90,12 @@ func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	c := exec.Command(cmd, args...)
 
 	killChannel := make(chan struct{}, 1)
-	statusChan := make(chan *JobStatus, 1)
+	statusChan := make(chan JobStatus, 1)
 	jobChans := JobChans{Kill: killChannel, Status: statusChan}
 	jm.JobChannels.Store(id, jobChans)
 
-	info := JobInfo{Command: c, JobStatus: nil}
+	status := JobStatus{State: Running, ExitCode: -1, Output: nil}
+	info := JobInfo{Command: c, Status: status}
 	jm.JobInfos.Store(id, info)
 
 	if err := initJobWorker(id, info, jobChans); err != nil {
@@ -110,16 +112,19 @@ func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 
 func (jm *JobsManager) Query(id uuid.UUID) (bool, *JobStatus) {
 	if chans, ok := jm.JobChannels.Load(id); ok {
+		var info JobInfo
 		select {
 		case status := <-chans.(JobChans).Status:
-			info, _ := jm.JobInfos.Load(id)
-			info.(*JobInfo).JobStatus = status
+			uncastedInfo, _ := jm.JobInfos.Load(id)
+			info = uncastedInfo.(JobInfo)
+			info.Status = status
 			jm.JobInfos.Store(id, info)
 		default:
+			uncastedInfo, _ := jm.JobInfos.Load(id)
+			info = uncastedInfo.(JobInfo)
 		}
 
-		info, _ := jm.JobInfos.Load(id)
-		return true, info.(*JobInfo).JobStatus
+		return true, &(info.Status)
 	}
 
 	return false, nil
