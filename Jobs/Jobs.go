@@ -2,17 +2,27 @@ package Jobs
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os/exec"
 	"sync"
 
 	"github.com/google/uuid"
 )
 
+type Status string
+
+const (
+	Completed Status = "Completed"
+	Errored          = "Errored"
+	Stopped          = "Stopped"
+	Running          = "Running"
+)
+
 type JobStatus struct {
-	// Options - ["Stopped", "Completed", "Errored"]
-	status   string
-	exitCode uint8
-	output   JobOutput
+	State    Status
+	ExitCode int
+	Output   *JobOutput
 }
 
 type JobOutput struct {
@@ -20,12 +30,11 @@ type JobOutput struct {
 	StdErr []byte
 }
 
-type JobsInfo struct {
+type JobInfo struct {
 	Command   *exec.Cmd
-	JobStatus JobStatus
+	JobStatus *JobStatus
 }
 
-// Note: All channels will be buffered with cap 1.
 type JobChans struct {
 	// Write from API
 	Kill chan struct{}
@@ -34,13 +43,61 @@ type JobChans struct {
 }
 
 type JobsManager struct {
-	JobInfo     sync.Map // uuid -> JobsInfo
+	JobInfos    sync.Map // uuid -> JobInfo
 	JobChannels sync.Map
 }
 
-func (jm *JobsManager) Start(cmd string, args ...string) uuid.UUID {
+func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
+	output := new(JobOutput)
+	stderr, err := info.Command.StderrPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	stdout, err := info.Command.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// TODO(@ckartik): Ensure that if command errors out early, we highlight in status/query.
+	err = info.Command.Start()
+	go func(output *JobOutput, channels JobChans, info JobInfo) {
+		jobStatus := JobStatus{State: Running, ExitCode: -1, Output: nil}
+
+		output.StdErr, err = io.ReadAll(stderr)
+		output.StdOut, err = io.ReadAll(stdout)
+
+		if err := info.Command.Wait(); err != nil {
+			select {
+			case <-channels.Kill:
+				jobStatus.State = Stopped
+			default:
+				jobStatus.State = Errored
+			}
+			jobStatus.ExitCode = err.(*exec.ExitError).ExitCode()
+		} else {
+
+		}
+
+	}(output, channels, info)
+	return err
+}
+
+func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	id := uuid.New()
-	return id
+	c := exec.Command(cmd, args...)
+	info := JobInfo{Command: c, JobStatus: nil}
+
+	killChannel := make(chan struct{}, 1)
+	statusChan := make(chan JobStatus, 1)
+	jobChans := JobChans{Kill: killChannel, Status: statusChan}
+	jm.JobChannels.Store(id, jobChans)
+
+	err := initJobWorker(id, info, jobChans)
+	if err != nil {
+		return id, err
+	}
+
+	return id, nil
 }
 
 func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
