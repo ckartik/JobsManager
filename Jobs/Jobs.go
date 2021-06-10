@@ -39,7 +39,7 @@ type JobChans struct {
 	// Write from API
 	Kill chan struct{}
 	// Read from API
-	Status chan JobStatus
+	Status chan *JobStatus
 }
 
 type JobsManager struct {
@@ -61,7 +61,7 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 	// TODO(@ckartik): Ensure that if command errors out early, we highlight in status/query.
 	err = info.Command.Start()
 	go func(output *JobOutput, channels JobChans, info JobInfo) {
-		var jobStatus JobStatus
+		var jobStatus *JobStatus
 
 		output.StdErr, err = io.ReadAll(stderr)
 		output.StdOut, err = io.ReadAll(stdout)
@@ -89,7 +89,7 @@ func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	c := exec.Command(cmd, args...)
 
 	killChannel := make(chan struct{}, 1)
-	statusChan := make(chan JobStatus, 1)
+	statusChan := make(chan *JobStatus, 1)
 	jobChans := JobChans{Kill: killChannel, Status: statusChan}
 	jm.JobChannels.Store(id, jobChans)
 
@@ -108,9 +108,21 @@ func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 	return true, nil
 }
 
-func (jm *JobsManager) Query(id uuid.UUID) (bool, JobStatus) {
+func (jm *JobsManager) Query(id uuid.UUID) (bool, *JobStatus) {
+	if chans, ok := jm.JobChannels.Load(id); ok {
+		select {
+		case status := <-chans.(JobChans).Status:
+			info, _ := jm.JobInfos.Load(id)
+			info.(*JobInfo).JobStatus = status
+			jm.JobInfos.Store(id, info)
+		default:
+		}
 
-	return true, JobStatus{}
+		info, _ := jm.JobInfos.Load(id)
+		return true, info.(*JobInfo).JobStatus
+	}
+
+	return false, nil
 }
 
 func Test() {
