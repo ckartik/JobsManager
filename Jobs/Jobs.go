@@ -1,6 +1,7 @@
 package Jobs
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -106,8 +107,20 @@ func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 }
 
 func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
-	_ = id
-	return true, nil
+	if info, ok := jm.JobInfos.Load(id); ok {
+		if info.(JobInfo).Status.State == Running {
+			chans, _ := jm.JobChannels.Load(id)
+			chans.(JobChans).Kill <- struct{}{}
+			err := info.(JobInfo).Command.Process.Kill()
+			if err != nil {
+				return false, err
+			}
+
+			return true, nil
+		}
+	}
+
+	return false, errors.New("ID not set")
 }
 
 func (jm *JobsManager) Query(id uuid.UUID) (bool, *JobStatus) {
