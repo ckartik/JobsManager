@@ -61,7 +61,7 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 	// TODO(@ckartik): Ensure that if command errors out early, we highlight in status/query.
 	err = info.Command.Start()
 	go func(output *JobOutput, channels JobChans, info JobInfo) {
-		jobStatus := JobStatus{State: Running, ExitCode: -1, Output: nil}
+		var jobStatus JobStatus
 
 		output.StdErr, err = io.ReadAll(stderr)
 		output.StdOut, err = io.ReadAll(stdout)
@@ -75,25 +75,28 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 			}
 			jobStatus.ExitCode = err.(*exec.ExitError).ExitCode()
 		} else {
-
+			jobStatus.ExitCode = 0
 		}
 
+		channels.Status <- jobStatus
 	}(output, channels, info)
+
 	return err
 }
 
 func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	id := uuid.New()
 	c := exec.Command(cmd, args...)
-	info := JobInfo{Command: c, JobStatus: nil}
 
 	killChannel := make(chan struct{}, 1)
 	statusChan := make(chan JobStatus, 1)
 	jobChans := JobChans{Kill: killChannel, Status: statusChan}
 	jm.JobChannels.Store(id, jobChans)
 
-	err := initJobWorker(id, info, jobChans)
-	if err != nil {
+	info := JobInfo{Command: c, JobStatus: nil}
+	jm.JobInfos.Store(id, info)
+
+	if err := initJobWorker(id, info, jobChans); err != nil {
 		return id, err
 	}
 
@@ -106,6 +109,7 @@ func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 }
 
 func (jm *JobsManager) Query(id uuid.UUID) (bool, JobStatus) {
+
 	return true, JobStatus{}
 }
 
