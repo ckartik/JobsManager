@@ -14,9 +14,9 @@ type Status string
 
 const (
 	Completed Status = "Completed"
-	Errored          = "Errored"
-	Stopped          = "Stopped"
-	Running          = "Running"
+	Errored   Status = "Errored"
+	Stopped   Status = "Stopped"
+	Running   Status = "Running"
 )
 
 type JobStatus struct {
