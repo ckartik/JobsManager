@@ -49,7 +49,6 @@ func TestStop(t *testing.T) {
 		t.Error(err)
 	}
 	jm.Stop(id)
-
 	ok, js := jm.Query(id)
 	if !ok {
 		t.Error("Query unable to find ID")
