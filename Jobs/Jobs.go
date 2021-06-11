@@ -67,7 +67,7 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 
 		output.StdErr, err = io.ReadAll(stderr)
 		output.StdOut, err = io.ReadAll(stdout)
-
+		jobStatus.Output = output
 		if err := info.Command.Wait(); err != nil {
 			select {
 			case <-channels.Kill:
@@ -77,7 +77,7 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 			}
 			jobStatus.ExitCode = err.(*exec.ExitError).ExitCode()
 		} else {
-			jobStatus = JobStatus{State: Completed, ExitCode: 0}
+			jobStatus = JobStatus{State: Completed, ExitCode: 0, Output: output}
 		}
 
 		channels.Status <- jobStatus
