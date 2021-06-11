@@ -21,3 +21,23 @@ func TestStartAndQuery(t *testing.T) {
 		t.Error("Job did not complete in time.")
 	}
 }
+
+func TestStop(t *testing.T) {
+	jm := JobsManager{}
+	id, err := jm.Start("sleep", "25")
+	if err != nil {
+		t.Error(err)
+	}
+	jm.Stop(id)
+
+	ok, js := jm.Query(id)
+	if !ok {
+		t.Error("Query unable to find ID")
+	}
+	for (*js).State == Running {
+		_, js = jm.Query(id)
+	}
+	if (*js).State != Stopped {
+		t.Error("Job did not show stopped status.")
+	}
+}
