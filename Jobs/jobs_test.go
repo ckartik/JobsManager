@@ -1,4 +1,4 @@
-package Jobs // TODO: Rename to jobs
+package jobs // TODO: Rename to jobs
 
 import (
 	"testing"

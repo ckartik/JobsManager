@@ -1,4 +1,5 @@
-package Jobs
+// Package jobs implemnts methods for interacting with OS manage commands called "Jobs".
+package jobs
 
 import (
 	"errors"
@@ -122,6 +123,10 @@ func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 	return false, errors.New("ID not set")
 }
 
+// Query will retrieve the current [JobStatus] of the job that corresponds with `id`.
+// If a job with `id` cannot be found, the function will return false, nil.
+//
+//
 func (jm *JobsManager) Query(id uuid.UUID) (bool, *JobStatus) {
 	if chans, ok := jm.JobChannels.Load(id); ok {
 		var info JobInfo

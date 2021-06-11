@@ -1,10 +1,10 @@
 package main
 
 import (
-	Jobs "github.com/ckartik/jobsmanager/jobs"
+	jobs "github.com/ckartik/jobsmanager/jobs"
 )
 
 func main() {
-	jm := Jobs.JobsManager{}
+	jm := jobs.JobsManager{}
 	_ = jm
 }
