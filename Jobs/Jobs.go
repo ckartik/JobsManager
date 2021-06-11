@@ -2,7 +2,6 @@ package Jobs
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"os/exec"
@@ -141,8 +140,4 @@ func (jm *JobsManager) Query(id uuid.UUID) (bool, *JobStatus) {
 	}
 
 	return false, nil
-}
-
-func Test() {
-	fmt.Println("HELLLOO")
 }
