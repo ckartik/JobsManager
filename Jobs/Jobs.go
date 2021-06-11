@@ -49,6 +49,13 @@ type JobsManager struct {
 	JobChannels sync.Map
 }
 
+// initJobWorker is the primary worker of the JobsService. It will coordinate the
+// running of a job, it's closing, output handling, and coordinate setting state,
+// to reflect erroed v.s user stopped.
+// If unable to intialize the command, it will return an error.
+//
+// the method does not wait for processing to compelete, but rather spins up a
+// new goroutine.
 func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 	output := new(JobOutput)
 	stderr, err := info.Command.StderrPipe()
@@ -87,6 +94,8 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 	return err
 }
 
+// Start sets up the command and initializes it.
+// It returns a probablistically unique uuidv4, which can be used to stop/query.
 func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	id := uuid.New()
 	c := exec.Command(cmd, args...)
@@ -107,7 +116,8 @@ func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// Stop sends a
+// Stop sets up state to be set to Kill and sends a KILL SIG to the process.
+// If Stop can't find the corresponding `id` it will return false, error.
 func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 	if info, ok := jm.JobInfos.Load(id); ok {
 		if info.(JobInfo).Status.State == Running {
