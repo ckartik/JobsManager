@@ -64,7 +64,8 @@ func initJobWorker(id uuid.UUID, info JobInfo, channels JobChans) error {
 	err = info.Command.Start()
 	go func(output *JobOutput, channels JobChans, info JobInfo) {
 		var jobStatus JobStatus
-
+		// Note: we ensure that output is set and in a immutable state before communicating
+		// 	 it back through the channel, this allows us to maintain it as a pointer.
 		output.StdErr, err = io.ReadAll(stderr)
 		output.StdOut, err = io.ReadAll(stdout)
 		jobStatus.Output = output
@@ -106,11 +107,16 @@ func (jm *JobsManager) Start(cmd string, args ...string) (uuid.UUID, error) {
 	return id, nil
 }
 
+// Stop sends a
 func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 	if info, ok := jm.JobInfos.Load(id); ok {
 		if info.(JobInfo).Status.State == Running {
 			chans, _ := jm.JobChannels.Load(id)
-			chans.(JobChans).Kill <- struct{}{}
+			// Note: Trick to avoid blocking.
+			select {
+			case chans.(JobChans).Kill <- struct{}{}:
+			default:
+			}
 			err := info.(JobInfo).Command.Process.Kill()
 			if err != nil {
 				return false, err
@@ -125,8 +131,7 @@ func (jm *JobsManager) Stop(id uuid.UUID) (bool, error) {
 
 // Query will retrieve the current [JobStatus] of the job that corresponds with `id`.
 // If a job with `id` cannot be found, the function will return false, nil.
-//
-//
+// On success, it returns true, and a pointer to the jobstatus auto-stored in the heap.
 func (jm *JobsManager) Query(id uuid.UUID) (bool, *JobStatus) {
 	if chans, ok := jm.JobChannels.Load(id); ok {
 		var info JobInfo
